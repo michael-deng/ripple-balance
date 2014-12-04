@@ -19,8 +19,20 @@ remote.connect(function(err, res) {
 var totalXRP = 0;
 var totalIOU = new Object();
 
-var requestsCompleted = 0;
+var requestsCompleted = 0;  // Keeps track of the number of requests made
 
+/**
+*  Iterates through the accounts and prints their balances
+*/
+var accountBalances = function(args) {
+	totalRequests = 2 * (args.length - 2);  // The number of total requests made
+	for (var index = 2; index < args.length; index++) {
+		var accountName = args[index];
+		var options = { account: accountName };
+		printXRPBalance(options, sumXRP);
+		printIOUBalance(options, sumIOU);
+	}
+}
 
 /**
 *  Prints the XRP balance of a certain account given the request options as the parameter
@@ -29,10 +41,12 @@ var printXRPBalance = function(options, callback) {
 	var request = remote.requestAccountInfo(options, function(err, info) {
 		requestsCompleted += 1;
 		if (err) return console.log(err);
-		balance = info.account_data.Balance;
-		console.log('Balance Information for Account ' + options.account + ':\n');
-		logBalance(balance, 'XRP');
-		callback(balance);
+		balance = parseFloat(info.account_data.Balance);  // parseFloat is necessary because account_data.Balance is originally a string
+		console.log('\nBalance Information for Account ' + options.account + ':\n');
+		if (balance != 0) {
+			logBalance(balance, 'XRP');
+			return callback(balance);
+		}
 	});
 };
 
@@ -48,7 +62,7 @@ var printIOUBalance = function(options, callback) {
 
 		// Iterate through the trustlines and aggregates the balances and currency types
 		for (var index = 0; index < trustlines.length; index++) {
-			balance = trustlines[index].balance;
+			balance = parseFloat(trustlines[index].balance);  // parseFloat is necessary because lines.balance is originally a string
 			currency = trustlines[index].currency;
 			if (totalBalance[currency]) {
 				totalBalance[currency] += balance;
@@ -57,24 +71,15 @@ var printIOUBalance = function(options, callback) {
 			}
 		}
 		for (currency in totalBalance) {
-			logBalance(totalBalance[currency], currency);
+			if (totalBalance[currency] === 0) {
+				delete totalBalance[currency];  // Delete zero value balances
+			} else {
+				logBalance(totalBalance[currency], currency);
+			}
 		}
-		console.log('\n');
-		callback(totalBalance);
+		console.log();
+		return callback(totalBalance);
 	});
-}
-
-/**
-*  Iterates through the accounts and prints their balances
-*/
-var accountBalances = function(args) {
-	flag = 2 * (args.length - 2);
-	for (var index = 2; index < args.length; index++) {
-		var accountName = args[index];
-		var options = { account: accountName };
-		printXRPBalance(options, sumXRP);
-		printIOUBalance(options, sumIOU);
-	}
 }
 
 /**
@@ -82,7 +87,9 @@ var accountBalances = function(args) {
 */
 var sumXRP = function(balance) {
 	totalXRP += balance;
-	if (requestsCompleted == flag) {
+
+	// Prints the final balance if all requests have been made
+	if (requestsCompleted === totalRequests) {
 		logEndBalance(totalXRP, totalIOU);
 	}
 }
@@ -98,7 +105,9 @@ var sumIOU = function(balance) {
 			totalIOU[currency] = balance[currency];
 		}
 	}
-	if (requestsCompleted == flag) {
+
+	// Prints the final balance if all requests have been made
+	if (requestsCompleted === totalRequests) {
 		logEndBalance(totalXRP, totalIOU);
 	}
 }
@@ -114,13 +123,13 @@ var logBalance = function(balance, currencyType) {
 *  Prints final balance information in a readable format
 */
 var logEndBalance = function(endXRP, endIOU) {
-	console.log('TotalBalanceInformation:');
+	console.log('\nAggregated Balance Information:\n');
 	logBalance(endXRP, 'XRP');
 	for (currency in endIOU) {
 		logBalance(endIOU[currency], currency);
 	}
 }
 
+
+// The actual call that returns the balance informations
 accountBalances(process.argv);
-
-
